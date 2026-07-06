@@ -479,6 +479,25 @@ function TransferCard({ r }) {
 
       {routeHeader(r.labelA, r.tripA, colorA)}
       <Endpoint label={r.fromName} stop={r.aFrom} color={colorA} isDot />
+      {r.aLoop && (
+        <>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "#332614", border: "1px solid #5a4420", borderRadius: 8, padding: "6px 10px" }}>
+            <AlertTriangle size={14} color="#E8A33D" style={{ flexShrink: 0, marginTop: 1 }} />
+            <span style={{ fontSize: 11.5, color: "#E8C468", lineHeight: 1.5 }}>
+              Stay on board through <b>{r.aLoop.viaName}</b> — the bus loops around before it reaches {r.hubName}.
+              {r.aLoop.wait > 0 ? ` About ${r.aLoop.wait} min at ${r.aLoop.viaName}.` : ""}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+            <span style={{ width: 10, display: "flex", justifyContent: "center", flexShrink: 0, color: colorA }}>
+              <Repeat size={12} />
+            </span>
+            <div style={{ fontSize: 12, color: "#8a92a3" }}>
+              via {r.aLoop.viaName} · {fmt(r.aLoop.viaArrive)}{r.aLoop.wait > 0 ? ` → ${fmt(r.aLoop.viaDepart)}` : ""}
+            </div>
+          </div>
+        </>
+      )}
       <Endpoint label={r.hubName} stop={r.aTo} color={colorA} isDot={false} />
 
       <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
@@ -569,26 +588,45 @@ export default function TransitRoute() {
     for (const tA of RESOLVED) {
       if (!HUB_ROUTES.has(tA.route)) continue;
       if (day !== "Any" && !tA.days.includes(day)) continue;
-      const legA = findDirect(tA, origin, HUB_ID); // origin -> Bloomfield
-      if (!legA) continue;
-      const arr = legA.to.effMinutes ?? -Infinity;
-      // Earliest connecting trip on the OTHER hub route that reaches the dest.
+
+      // Leg A: origin -> Bloomfield. Directly if the origin reaches the hub on
+      // this trip; otherwise (origin sits past the hub on its loop) by riding
+      // around the turnaround onto the next loop, then reaching the hub there.
+      let legA = null;
+      const direct = findDirect(tA, origin, HUB_ID);
+      if (direct) {
+        legA = { from: direct.from, to: direct.to, arr: direct.to.effMinutes, aDays: tA.days, aTrip: tA.trip, loop: null };
+      } else {
+        const lr = findLoopRide(tA, origin, HUB_ID, day);
+        if (lr && lr.dest.effMinutes !== null) {
+          legA = {
+            from: lr.origin, to: lr.dest, arr: lr.dest.effMinutes,
+            aDays: lr.T.days.filter((d) => lr.T2.days.includes(d)),
+            aTrip: `${lr.T.trip} → ${lr.T2.trip}`,
+            loop: { viaName: STOP_NAME[lr.T.lastId], viaArrive: lr.T.endMin, viaDepart: lr.T2.startMin, wait: lr.T2.startMin - lr.T.endMin },
+          };
+        }
+      }
+      if (!legA || legA.arr === null) continue;
+
+      // Best connecting trip on the OTHER hub route that reaches the destination.
       let best = null;
       for (const tB of RESOLVED) {
         if (tB.route === tA.route || !HUB_ROUTES.has(tB.route)) continue;
-        const common = tA.days.filter((d) => tB.days.includes(d) && (day === "Any" || d === day));
+        const common = legA.aDays.filter((d) => tB.days.includes(d) && (day === "Any" || d === day));
         if (!common.length) continue;
-        const legB = findConnection(tB, HUB_ID, destination, arr); // Bloomfield -> dest
+        const legB = findConnection(tB, HUB_ID, destination, legA.arr); // Bloomfield -> dest
         if (!legB) continue;
         if (!best || legB.from.effMinutes < best.legB.from.effMinutes) best = { tB, legB, common };
       }
       if (!best) continue;
       out.push({
-        routeA: tA.route, labelA: tA.label, tripA: tA.trip,
+        routeA: tA.route, labelA: tA.label, tripA: legA.aTrip,
         routeB: best.tB.route, labelB: best.tB.label, tripB: best.tB.trip,
         fromName: stopLabel(legA.from), toName: stopLabel(best.legB.to), hubName: stopLabel(legA.to),
         aFrom: legA.from, aTo: legA.to, bFrom: best.legB.from, bTo: best.legB.to,
-        wait: (best.legB.from.effMinutes ?? 0) - (legA.to.effMinutes ?? 0),
+        aLoop: legA.loop,
+        wait: (best.legB.from.effMinutes ?? 0) - (legA.arr ?? 0),
         validDays: best.common,
       });
     }
