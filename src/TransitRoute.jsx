@@ -22,8 +22,7 @@ const STOP_NAME = {
   belleville: "Belleville Transit Terminal",
   rossmore: "Rossmore Plaza",
   huff: "Huff Estates",
-  "bloomfield-s": "Bloomfield South",
-  "bloomfield-n": "Bloomfield North",
+  bloomfield: "Bloomfield",
   "prinzen-s": "Prinzen Ford South",
   "prinzen-n": "Prinzen Ford North",
   waring: "The Waring House",
@@ -66,10 +65,17 @@ const FRISAT = ["Fri", "Sat"];
 const EVENT = ["Fri", "Sat"]; // Base31 late-night: select event nights only
 
 // --- Stop builders ---------------------------------------------------------
-const T = (id, minutes, note) => ({ id, minutes, status: "timed", note });
-const E = (id, note) => ({ id, minutes: null, status: "estimate", note });
-const R = (id, note) => ({ id, minutes: null, status: "request", note });
-const N = (id, note) => ({ id, minutes: null, status: "none", note });
+// `label` overrides the canonical name for display only. Used for Bloomfield:
+// North and South are one crossroads (a street apart), so they share the id
+// `bloomfield` for matching, but each result still shows the actual side.
+const T = (id, minutes, note, label) => ({ id, minutes, status: "timed", note, label });
+const E = (id, note, label) => ({ id, minutes: null, status: "estimate", note, label });
+const R = (id, note, label) => ({ id, minutes: null, status: "request", note, label });
+const N = (id, note, label) => ({ id, minutes: null, status: "none", note, label });
+
+// Bloomfield stop shorthands — same id, different printed side.
+const BN = (minutes, note) => T("bloomfield", minutes, note, "Bloomfield North");
+const BS = (minutes, note) => T("bloomfield", minutes, note, "Bloomfield South");
 
 // --- Route 1 (weekday loop: Belleville -> Picton -> Belleville) -------------
 // timed values: [depart, bloomfieldS, mainKFC, base31, maccaulayN, crystal,
@@ -79,11 +85,11 @@ function r1(trip, v) {
   return {
     route: "Route 1", label: "Route 1 · Weekday", runDays: "Monday–Friday", days: WEEKDAY, trip,
     stops: [
-      T("belleville", dep), R("rossmore"), R("huff"), T("bloomfield-s", bs), E("prinzen-s"),
+      T("belleville", dep), R("rossmore"), R("huff"), BS(bs), E("prinzen-s"),
       R("waring"), E("loyalist-s"), T("main-kfc", main), E("mary"), E("maccaulay-s"),
       T("base31-commissary", b31), E("macaulay-village"), T("maccaulay-n", mn), E("picton-harbour"),
       T("crystal", cr), T("paul", pa), T("king-ross", kr), E("king-bowery"), T("metro-picton", me),
-      E("loyalist-n"), R("waring"), E("prinzen-n"), T("bloomfield-n", bn), R("huff"), R("rossmore"),
+      E("loyalist-n"), R("waring"), E("prinzen-n"), BN(bn), R("huff"), R("rossmore"),
       T("belleville", arr),
     ],
   };
@@ -97,9 +103,9 @@ function r2(trip, days, runDays, v) {
     route: "Route 2", label: "Route 2 · Weekend", runDays, days, trip,
     stops: [
       T("rec-centre", rec), E("heritage"), E("lakeside"), T("wellington-church", ch),
-      E("wellington-beach-s"), E("wellington-harbour-s"), R("eddie"), T("bloomfield-n", bno),
+      E("wellington-beach-s"), E("wellington-harbour-s"), R("eddie"), BN(bno),
       R("huff"), R("rossmore"), T("belleville", ba), T("belleville", bd), R("rossmore"), R("huff"),
-      T("bloomfield-n", bnr), R("eddie"), E("wellington-harbour-n"), E("wellington-beach-n"),
+      BN(bnr), R("eddie"), E("wellington-harbour-n"), E("wellington-beach-n"),
       T("cml-snider", cml), E("legion"), E("sandbanks-medical"), T("rec-centre", reca),
     ],
   };
@@ -112,7 +118,7 @@ function r3(trip, days, runDays, v) {
   return {
     route: "Route 3", label: "Route 3 · Weekend", runDays, days, trip,
     stops: [
-      T("metro-picton", me), E("loyalist-n"), R("waring"), E("prinzen-n"), T("bloomfield-n", bn),
+      T("metro-picton", me), E("loyalist-n"), R("waring"), E("prinzen-n"), BN(bn),
       E("prinzen-s"), R("waring"), E("main-kfc"), T("mary", ma), E("maccaulay-s"),
       T("base31-commissary", b31), R("base31-drill"), E("macaulay-village"), T("maccaulay-n", mn),
       E("picton-harbour"), T("king-ross", kr), E("king-bowery"), T("metro-picton", mea),
@@ -150,10 +156,10 @@ const TRIPS = [
     trip: "Trip 7 (Last Bus)",
     stops: [
       T("rec-centre", 1274), E("heritage"), E("lakeside"), T("wellington-church", 1284),
-      E("wellington-beach-s"), E("wellington-harbour-s"), R("eddie"), T("bloomfield-n", 1297),
+      E("wellington-beach-s"), E("wellington-harbour-s"), R("eddie"), BN(1297),
       R("huff"), R("rossmore"),
       T("belleville", 1325, "Last bus of the night — arrives Belleville ~10:05 PM. On Jul 17 & Aug 28 this run ends in Bloomfield instead."),
-      N("belleville"), N("rossmore"), N("huff"), N("bloomfield-n"), N("eddie"),
+      N("belleville"), N("rossmore"), N("huff"), N("bloomfield", undefined, "Bloomfield North"), N("eddie"),
       N("wellington-harbour-n"), N("wellington-beach-n"), N("cml-snider"), N("legion"),
       N("sandbanks-medical"), N("rec-centre"),
     ],
@@ -176,7 +182,7 @@ const TRIPS = [
     route: "Route 3", label: "Route 3 · Weekend", runDays: "Friday & Saturday", days: FRISAT,
     trip: "Trip 13 (Last Bus)",
     stops: [
-      T("metro-picton", 1283), E("loyalist-n"), R("waring"), E("prinzen-n"), T("bloomfield-n", 1297),
+      T("metro-picton", 1283), E("loyalist-n"), R("waring"), E("prinzen-n"), BN(1297),
       E("prinzen-s"), R("waring"), E("main-kfc"), T("mary", 1307), E("maccaulay-s"),
       T("base31-commissary", 1314),
       R("base31-drill", "Trip ends here — no service to the remaining Picton stops on this run."),
@@ -186,13 +192,13 @@ const TRIPS = [
   },
 
   // Base31 late-night — event nights
-  bnite("Departure 1", 1340, 1346, N("bloomfield-n"), N("wellington"), N("belleville")),
-  bnite("Departure 2", 1350, 1356, N("bloomfield-n"), N("wellington"), N("belleville")),
-  bnite("Departure 3", 1360, 1366, N("bloomfield-n"), N("wellington"), N("belleville")),
-  bnite("Departure 4", 1370, 1376, N("bloomfield-n"), N("wellington"), N("belleville")),
-  bnite("Departure 5", 1380, 1386, E("bloomfield-n"), E("wellington"), N("belleville")),
-  bnite("Departure 6", 1390, 1396, E("bloomfield-n"), N("wellington"), T("belleville", 1429)),
-  bnite("Departure 7", 1440, 1446, E("bloomfield-n"), E("wellington"), N("belleville")), // 12:00a / 12:06a
+  bnite("Departure 1", 1340, 1346, N("bloomfield", undefined, "Bloomfield North"), N("wellington"), N("belleville")),
+  bnite("Departure 2", 1350, 1356, N("bloomfield", undefined, "Bloomfield North"), N("wellington"), N("belleville")),
+  bnite("Departure 3", 1360, 1366, N("bloomfield", undefined, "Bloomfield North"), N("wellington"), N("belleville")),
+  bnite("Departure 4", 1370, 1376, N("bloomfield", undefined, "Bloomfield North"), N("wellington"), N("belleville")),
+  bnite("Departure 5", 1380, 1386, E("bloomfield", undefined, "Bloomfield North"), E("wellington"), N("belleville")),
+  bnite("Departure 6", 1390, 1396, E("bloomfield", undefined, "Bloomfield North"), N("wellington"), T("belleville", 1429)),
+  bnite("Departure 7", 1440, 1446, E("bloomfield", undefined, "Bloomfield North"), E("wellington"), N("belleville")), // 12:00a / 12:06a
 ];
 
 // --- Boardable stop list for the dropdowns ---------------------------------
@@ -211,11 +217,15 @@ const ROUTE_COLOR = {
 
 // The only real transfer hub. Route 2 (Wellington side) and Route 3 (Picton
 // side) are the only routes that run the same days AND share a stop — Bloomfield
-// North — where the schedule times them to meet. Route 1 is weekday-only (never
+// — where the schedule times them to meet. Route 1 is weekday-only (never
 // concurrent with 2/3), and Base31 is a one-way post-event bus that starts after
 // 2/3 have stopped for the night — so neither is a usable transfer partner.
-const HUB_ID = "bloomfield-n";
+const HUB_ID = "bloomfield";
 const HUB_ROUTES = new Set(["Route 2", "Route 3"]);
+
+// Display name for a stop: its per-occurrence side label (Bloomfield N/S) if
+// present, otherwise the canonical name.
+const stopLabel = (s) => (s && s.label) || (s && STOP_NAME[s.id]) || (s && s.id) || "";
 
 const DAYS = [
   ["Any", "Any day"], ["Mon", "Monday"], ["Tue", "Tuesday"], ["Wed", "Wednesday"],
@@ -306,14 +316,30 @@ function findLoopRide(T, originId, destId, day) {
   return null;
 }
 
-// Find a direct ride: origin, then destination at a LATER index. Skip
-// No-Service stops so they can't be boarded/alighted.
+// Find the best direct ride within a trip: board the origin, alight the
+// destination at a LATER index. A stop can appear more than once in a loop
+// (e.g. unified Bloomfield on Route 1: outbound South + return North), so we
+// consider every boarding and pick the one that reaches the destination
+// soonest — tie-broken by the latest departure (the shortest time on board).
+// Without this, boarding the "wrong" Bloomfield side would ride the whole loop.
 function findDirect(trip, originId, destId) {
-  const o = trip.stops.findIndex((s) => s.id === originId && s.status !== "none");
-  if (o === -1) return null;
-  const d = trip.stops.findIndex((s, i) => i > o && s.id === destId && s.status !== "none");
-  if (d === -1) return null;
-  return { from: trip.stops[o], to: trip.stops[d] };
+  let best = null;
+  for (let o = 0; o < trip.stops.length; o++) {
+    const so = trip.stops[o];
+    if (so.id !== originId || so.status === "none") continue;
+    const d = trip.stops.findIndex((s, i) => i > o && s.id === destId && s.status !== "none");
+    if (d === -1) continue;
+    const cand = { from: so, to: trip.stops[d] };
+    if (!best) {
+      best = cand;
+      continue;
+    }
+    const a = cand.to.effMinutes ?? Infinity;
+    const b = best.to.effMinutes ?? Infinity;
+    const later = (cand.from.effMinutes ?? -Infinity) > (best.from.effMinutes ?? -Infinity);
+    if (a < b || (a === b && later)) best = cand;
+  }
+  return best;
 }
 
 // Board the hub at the earliest departure at/after `minDepart` that still reaches
@@ -499,7 +525,7 @@ export default function TransitRoute() {
       if (!hit) continue;
       out.push({
         route: trip.route, label: trip.label, trip: trip.trip, runDays: trip.runDays,
-        fromName: STOP_NAME[origin], toName: STOP_NAME[destination],
+        fromName: stopLabel(hit.from), toName: stopLabel(hit.to),
         from: hit.from, to: hit.to,
       });
     }
@@ -517,7 +543,7 @@ export default function TransitRoute() {
       out.push({
         route: T.route, label: T.label,
         trip: `${ride.T.trip} → ${ride.T2.trip}`,
-        fromName: STOP_NAME[origin], toName: STOP_NAME[destination],
+        fromName: stopLabel(ride.origin), toName: stopLabel(ride.dest),
         from: ride.origin, to: ride.dest,
         viaName: STOP_NAME[ride.T.lastId],
         viaArrive: ride.T.endMin, viaDepart: ride.T2.startMin,
@@ -560,7 +586,7 @@ export default function TransitRoute() {
       out.push({
         routeA: tA.route, labelA: tA.label, tripA: tA.trip,
         routeB: best.tB.route, labelB: best.tB.label, tripB: best.tB.trip,
-        fromName: STOP_NAME[origin], toName: STOP_NAME[destination], hubName: STOP_NAME[HUB_ID],
+        fromName: stopLabel(legA.from), toName: stopLabel(best.legB.to), hubName: stopLabel(legA.to),
         aFrom: legA.from, aTo: legA.to, bFrom: best.legB.from, bTo: best.legB.to,
         wait: (best.legB.from.effMinutes ?? 0) - (legA.to.effMinutes ?? 0),
         validDays: best.common,
@@ -666,6 +692,10 @@ export default function TransitRoute() {
         <div style={{ marginTop: 24, fontSize: 12, color: "#4a5265", lineHeight: 1.6, display: "flex", gap: 6 }}>
           <Clock size={13} style={{ flexShrink: 0, marginTop: 2 }} />
           <span>A leading “~” means the time is estimated from the previous timed stop. “CALL AHEAD” stops only get served on request.</span>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 12, color: "#4a5265", lineHeight: 1.6, display: "flex", gap: 6 }}>
+          <MapPin size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>“Bloomfield North” and “Bloomfield South” are the same crossroads on opposite sides of the street — the planner picks the side facing your destination, so double-check which side the result shows.</span>
         </div>
       </div>
     </div>
